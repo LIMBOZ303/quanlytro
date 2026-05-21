@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import axiosClient from '../api/axiosClient';
 import { Home, Users, DollarSign, Activity } from 'lucide-react';
-
-const API_URL = 'http://localhost:5000/api';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -15,20 +13,20 @@ const Dashboard = () => {
     const fetchData = async () => {
       try {
         const [roomsRes, tenantsRes] = await Promise.all([
-          axios.get(`${API_URL}/rooms`),
-          axios.get(`${API_URL}/tenants`)
+          axiosClient.get('/rooms'),
+          axiosClient.get('/tenants')
         ]);
-        
-        const rooms = roomsRes.data;
-        const tenants = tenantsRes.data;
-        
+
+        const rooms = Array.isArray(roomsRes?.data) ? roomsRes.data : [];
+        const tenants = Array.isArray(tenantsRes?.data) ? tenantsRes.data : [];
+
         setStats({
           totalRooms: rooms.length,
           rentedRooms: rooms.filter(r => r.status === 'Đã thuê').length,
           totalTenants: tenants.length,
         });
       } catch (err) {
-        console.error(err);
+        console.error('Error fetching dashboard stats:', err);
       }
     };
     fetchData();

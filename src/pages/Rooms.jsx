@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axiosClient from '../api/axiosClient';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-
-const API_URL = 'http://localhost:5000/api';
 
 const Rooms = () => {
   const [rooms, setRooms] = useState([]);
@@ -12,10 +10,11 @@ const Rooms = () => {
 
   const fetchRooms = async () => {
     try {
-      const res = await axios.get(`${API_URL}/rooms`);
-      setRooms(res.data);
+      const res = await axiosClient.get('/rooms');
+      setRooms(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching rooms:', err);
+      setRooms([]);
     }
   };
 
@@ -33,16 +32,16 @@ const Rooms = () => {
         status: formData.status
       };
       if (editingId) {
-        await axios.put(`${API_URL}/rooms/${editingId}`, payload);
+        await axiosClient.put(`/rooms/${editingId}`, payload);
       } else {
-        await axios.post(`${API_URL}/rooms`, payload);
+        await axiosClient.post('/rooms', payload);
       }
       setIsModalOpen(false);
       setEditingId(null);
       setFormData({ name: '', rentPrice: '', serviceFee: '', status: 'Trống' });
       fetchRooms();
     } catch (err) {
-      console.error(err);
+      console.error('Error submitting room:', err);
       alert('Có lỗi xảy ra!');
     }
   };
@@ -56,10 +55,11 @@ const Rooms = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc muốn xóa phòng này?')) {
       try {
-        await axios.delete(`${API_URL}/rooms/${id}`);
+        await axiosClient.delete(`/rooms/${id}`);
         fetchRooms();
       } catch (err) {
-        console.error(err);
+        console.error('Error deleting room:', err);
+        alert('Có lỗi xảy ra khi xóa phòng!');
       }
     }
   };
@@ -68,7 +68,7 @@ const Rooms = () => {
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
         <h3 className="text-lg font-semibold text-slate-800">Danh sách Phòng</h3>
-        <button 
+        <button
           onClick={() => { setEditingId(null); setFormData({ name: '', rentPrice: '', serviceFee: '', status: 'Trống' }); setIsModalOpen(true); }}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
         >
@@ -88,13 +88,13 @@ const Rooms = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rooms.length === 0 ? (
+            {!Array.isArray(rooms) || rooms.length === 0 ? (
               <tr><td colSpan="5" className="text-center py-8 text-slate-500">Chưa có dữ liệu phòng</td></tr>
             ) : rooms.map(room => (
               <tr key={room.id} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-6 py-4 font-medium text-slate-800">{room.name}</td>
-                <td className="px-6 py-4 text-slate-600">{room.rentPrice.toLocaleString()}</td>
-                <td className="px-6 py-4 text-slate-600">{room.serviceFee.toLocaleString()}</td>
+                <td className="px-6 py-4 text-slate-600">{room.rentPrice ? room.rentPrice.toLocaleString() : '0'}</td>
+                <td className="px-6 py-4 text-slate-600">{room.serviceFee ? room.serviceFee.toLocaleString() : '0'}</td>
                 <td className="px-6 py-4">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${room.status === 'Đã thuê' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
                     {room.status}
@@ -118,15 +118,15 @@ const Rooms = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Tên Phòng</label>
-                <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Giá Thuê (VNĐ)</label>
-                <input type="number" required value={formData.rentPrice} onChange={e => setFormData({...formData, rentPrice: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="number" required value={formData.rentPrice} onChange={e => setFormData({ ...formData, rentPrice: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Phí Dịch Vụ (VNĐ)</label>
-                <input type="number" required value={formData.serviceFee} onChange={e => setFormData({...formData, serviceFee: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="number" required value={formData.serviceFee} onChange={e => setFormData({ ...formData, serviceFee: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Hủy</button>

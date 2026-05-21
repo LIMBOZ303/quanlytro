@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axiosClient from '../api/axiosClient';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
-
-const API_URL = 'http://localhost:5000/api';
 
 const Tenants = () => {
   const [tenants, setTenants] = useState([]);
@@ -14,13 +12,15 @@ const Tenants = () => {
   const fetchData = async () => {
     try {
       const [tRes, rRes] = await Promise.all([
-        axios.get(`${API_URL}/tenants`),
-        axios.get(`${API_URL}/rooms`)
+        axiosClient.get('/tenants'),
+        axiosClient.get('/rooms')
       ]);
-      setTenants(tRes.data);
-      setRooms(rRes.data);
+      setTenants(Array.isArray(tRes?.data) ? tRes.data : []);
+      setRooms(Array.isArray(rRes?.data) ? rRes.data : []);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching tenants data:', err);
+      setTenants([]);
+      setRooms([]);
     }
   };
 
@@ -40,28 +40,28 @@ const Tenants = () => {
         roomId: formData.roomId || null
       };
       if (editingId) {
-        await axios.put(`${API_URL}/tenants/${editingId}`, payload);
+        await axiosClient.put(`/tenants/${editingId}`, payload);
       } else {
-        await axios.post(`${API_URL}/tenants`, payload);
+        await axiosClient.post('/tenants', payload);
       }
       setIsModalOpen(false);
       setEditingId(null);
       setFormData({ fullName: '', birthYear: '', hometown: '', idCard: '', phone: '', roomId: '' });
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.error('Error submitting tenant:', err);
       alert('Có lỗi xảy ra!');
     }
   };
 
   const handleEdit = (tenant) => {
-    setFormData({ 
-      fullName: tenant.fullName, 
-      birthYear: tenant.birthYear, 
-      hometown: tenant.hometown, 
-      idCard: tenant.idCard, 
-      phone: tenant.phone, 
-      roomId: tenant.roomId || '' 
+    setFormData({
+      fullName: tenant.fullName,
+      birthYear: tenant.birthYear,
+      hometown: tenant.hometown,
+      idCard: tenant.idCard,
+      phone: tenant.phone,
+      roomId: tenant.roomId || ''
     });
     setEditingId(tenant.id);
     setIsModalOpen(true);
@@ -70,10 +70,11 @@ const Tenants = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc muốn xóa khách thuê này?')) {
       try {
-        await axios.delete(`${API_URL}/tenants/${id}`);
+        await axiosClient.delete(`/tenants/${id}`);
         fetchData();
       } catch (err) {
-        console.error(err);
+        console.error('Error deleting tenant:', err);
+        alert('Có lỗi xảy ra khi xóa khách thuê!');
       }
     }
   };
@@ -82,7 +83,7 @@ const Tenants = () => {
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
       <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
         <h3 className="text-lg font-semibold text-slate-800">Danh sách Khách Thuê</h3>
-        <button 
+        <button
           onClick={() => { setEditingId(null); setFormData({ fullName: '', birthYear: '', hometown: '', idCard: '', phone: '', roomId: '' }); setIsModalOpen(true); }}
           className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
         >
@@ -102,7 +103,7 @@ const Tenants = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {tenants.length === 0 ? (
+            {!Array.isArray(tenants) || tenants.length === 0 ? (
               <tr><td colSpan="5" className="text-center py-8 text-slate-500">Chưa có dữ liệu</td></tr>
             ) : tenants.map(tenant => (
               <tr key={tenant.id} className="hover:bg-slate-50/50 transition-colors">
@@ -142,30 +143,30 @@ const Tenants = () => {
             <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Họ và Tên</label>
-                <input type="text" required value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Năm sinh</label>
-                <input type="number" required value={formData.birthYear} onChange={e => setFormData({...formData, birthYear: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="number" required value={formData.birthYear} onChange={e => setFormData({ ...formData, birthYear: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Quê quán</label>
-                <input type="text" required value={formData.hometown} onChange={e => setFormData({...formData, hometown: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.hometown} onChange={e => setFormData({ ...formData, hometown: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">CCCD</label>
-                <input type="text" required value={formData.idCard} onChange={e => setFormData({...formData, idCard: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.idCard} onChange={e => setFormData({ ...formData, idCard: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">SĐT</label>
-                <input type="text" required value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Phòng đang ở</label>
-                <select value={formData.roomId} onChange={e => setFormData({...formData, roomId: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <select value={formData.roomId} onChange={e => setFormData({ ...formData, roomId: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
                   <option value="">-- Không gán phòng --</option>
-                  {rooms.map(r => (
-                    <option key={r.id} value={r.id}>{r.name} (Giá: {r.rentPrice.toLocaleString()})</option>
+                  {Array.isArray(rooms) && rooms.map(r => (
+                    <option key={r.id} value={r.id}>{r.name} (Giá: {r.rentPrice ? r.rentPrice.toLocaleString() : '0'})</option>
                   ))}
                 </select>
               </div>

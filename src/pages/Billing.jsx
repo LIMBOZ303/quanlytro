@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import axiosClient from '../api/axiosClient';
 import html2canvas from 'html2canvas';
-
-const API_URL = 'http://localhost:5000/api';
 
 const Billing = () => {
   const [rooms, setRooms] = useState([]);
@@ -17,13 +15,16 @@ const Billing = () => {
   const fetchData = async () => {
     try {
       const [rRes, bRes] = await Promise.all([
-        axios.get(`${API_URL}/rooms`),
-        axios.get(`${API_URL}/bills?month=${selectedMonth}&year=${selectedYear}`)
+        axiosClient.get('/rooms'),
+        axiosClient.get(`/bills?month=${selectedMonth}&year=${selectedYear}`)
       ]);
-      setRooms(rRes.data.filter(r => r.status === 'Đã thuê'));
-      setBills(bRes.data);
+      const roomsData = Array.isArray(rRes?.data) ? rRes.data : [];
+      setRooms(roomsData.filter(r => r.status === 'Đã thuê'));
+      setBills(Array.isArray(bRes?.data) ? bRes.data : []);
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching billing data:', err);
+      setRooms([]);
+      setBills([]);
     }
   };
 
@@ -34,7 +35,7 @@ const Billing = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_URL}/bills`, {
+      await axiosClient.post('/bills', {
         ...formData,
         month: selectedMonth,
         year: selectedYear
@@ -43,7 +44,7 @@ const Billing = () => {
       setFormData({ roomId: '', electricityOld: '', electricityNew: '', waterOld: '', waterNew: '', electricityPrice: '3500', waterPrice: '20000' });
       fetchData();
     } catch (err) {
-      console.error(err);
+      console.error('Error calculating bill:', err);
       alert('Có lỗi hoặc phòng này đã được tính tiền cho tháng này!');
     }
   };
@@ -54,7 +55,7 @@ const Billing = () => {
       const image = canvas.toDataURL("image/png");
       const link = document.createElement('a');
       link.href = image;
-      link.download = `HoaDon_${billToExport.room.name}_T${billToExport.month}_${billToExport.year}.png`;
+      link.download = `HoaDon_${billToExport.room?.name || 'Phong'}_T${billToExport.month}_${billToExport.year}.png`;
       link.click();
       setBillToExport(null);
     }
@@ -67,7 +68,7 @@ const Billing = () => {
           <div>
             <label className="text-sm text-slate-500 mr-2">Tháng</label>
             <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))} className="border border-slate-300 rounded px-3 py-1.5 focus:ring-indigo-500">
-              {[...Array(12)].map((_, i) => <option key={i+1} value={i+1}>Tháng {i+1}</option>)}
+              {[...Array(12)].map((_, i) => <option key={i + 1} value={i + 1}>Tháng {i + 1}</option>)}
             </select>
           </div>
           <div>
@@ -77,7 +78,7 @@ const Billing = () => {
             </select>
           </div>
         </div>
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-medium transition-colors"
         >
@@ -98,14 +99,14 @@ const Billing = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {bills.length === 0 ? (
+            {!Array.isArray(bills) || bills.length === 0 ? (
               <tr><td colSpan="6" className="text-center py-8 text-slate-500">Chưa có hóa đơn cho tháng này</td></tr>
             ) : bills.map(bill => (
               <tr key={bill.id} className="hover:bg-slate-50/50">
-                <td className="px-6 py-4 font-bold text-slate-800">{bill.room.name}</td>
+                <td className="px-6 py-4 font-bold text-slate-800">{bill.room ? bill.room.name : 'Không xác định'}</td>
                 <td className="px-6 py-4">{bill.electricityOld} - {bill.electricityNew}</td>
                 <td className="px-6 py-4">{bill.waterOld} - {bill.waterNew}</td>
-                <td className="px-6 py-4 font-bold text-rose-600">{bill.totalAmount.toLocaleString()}</td>
+                <td className="px-6 py-4 font-bold text-rose-600">{bill.totalAmount ? bill.totalAmount.toLocaleString() : '0'}</td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded text-xs font-medium ${bill.status === 'Đã thanh toán' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                     {bill.status}
@@ -128,34 +129,34 @@ const Billing = () => {
             <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Chọn phòng (Chỉ hiện phòng đã thuê)</label>
-                <select required value={formData.roomId} onChange={e => setFormData({...formData, roomId: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg">
+                <select required value={formData.roomId} onChange={e => setFormData({ ...formData, roomId: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg">
                   <option value="">-- Chọn phòng --</option>
-                  {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  {Array.isArray(rooms) && rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Số điện CŨ</label>
-                <input type="number" required value={formData.electricityOld} onChange={e => setFormData({...formData, electricityOld: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+                <input type="number" required value={formData.electricityOld} onChange={e => setFormData({ ...formData, electricityOld: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Số điện MỚI</label>
-                <input type="number" required value={formData.electricityNew} onChange={e => setFormData({...formData, electricityNew: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+                <input type="number" required value={formData.electricityNew} onChange={e => setFormData({ ...formData, electricityNew: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Số nước CŨ</label>
-                <input type="number" required value={formData.waterOld} onChange={e => setFormData({...formData, waterOld: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+                <input type="number" required value={formData.waterOld} onChange={e => setFormData({ ...formData, waterOld: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Số nước MỚI</label>
-                <input type="number" required value={formData.waterNew} onChange={e => setFormData({...formData, waterNew: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+                <input type="number" required value={formData.waterNew} onChange={e => setFormData({ ...formData, waterNew: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Đơn giá điện</label>
-                <input type="number" required value={formData.electricityPrice} onChange={e => setFormData({...formData, electricityPrice: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+                <input type="number" required value={formData.electricityPrice} onChange={e => setFormData({ ...formData, electricityPrice: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Đơn giá nước</label>
-                <input type="number" required value={formData.waterPrice} onChange={e => setFormData({...formData, waterPrice: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
+                <input type="number" required value={formData.waterPrice} onChange={e => setFormData({ ...formData, waterPrice: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg" />
               </div>
               <div className="col-span-2 flex justify-end gap-3 pt-4 border-t mt-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Hủy</button>
@@ -174,17 +175,17 @@ const Billing = () => {
               <div className="text-center mb-6 border-b pb-4">
                 <h2 className="text-2xl font-bold text-slate-800">PHIẾU THU TIỀN PHÒNG</h2>
                 <p className="text-slate-500">Tháng {billToExport.month} / {billToExport.year}</p>
-                <p className="text-lg font-bold text-indigo-600 mt-2">Phòng: {billToExport.room.name}</p>
+                <p className="text-lg font-bold text-indigo-600 mt-2">Phòng: {billToExport.room?.name || 'Không xác định'}</p>
               </div>
-              
+
               <div className="space-y-3 text-sm text-slate-700">
                 <div className="flex justify-between">
                   <span>Tiền phòng:</span>
-                  <span className="font-semibold">{billToExport.room.rentPrice.toLocaleString()} VNĐ</span>
+                  <span className="font-semibold">{(billToExport.room?.rentPrice || 0).toLocaleString()} VNĐ</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Phí dịch vụ:</span>
-                  <span className="font-semibold">{billToExport.room.serviceFee.toLocaleString()} VNĐ</span>
+                  <span className="font-semibold">{(billToExport.room?.serviceFee || 0).toLocaleString()} VNĐ</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Tiền điện ({billToExport.electricityNew} - {billToExport.electricityOld} = {billToExport.electricityNew - billToExport.electricityOld} kWh):</span>
@@ -195,11 +196,11 @@ const Billing = () => {
                   <span className="font-semibold">{((billToExport.waterNew - billToExport.waterOld) * billToExport.waterPrice).toLocaleString()} VNĐ</span>
                 </div>
               </div>
-              
+
               <div className="mt-6 pt-4 border-t-2 border-dashed border-slate-200">
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-bold text-slate-800">TỔNG CỘNG:</span>
-                  <span className="text-2xl font-black text-rose-600">{billToExport.totalAmount.toLocaleString()} đ</span>
+                  <span className="text-2xl font-black text-rose-600">{(billToExport.totalAmount || 0).toLocaleString()} đ</span>
                 </div>
               </div>
               <div className="text-center mt-6 text-xs text-slate-400">
@@ -207,7 +208,7 @@ const Billing = () => {
                 <p>Vui lòng thanh toán trước ngày 05 hàng tháng.</p>
               </div>
             </div>
-            
+
             <div className="p-4 bg-slate-50 border-t flex justify-end gap-3">
               <button onClick={() => setBillToExport(null)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded font-medium">Đóng</button>
               <button onClick={handleExport} className="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded font-medium">Tải Ảnh (Lưu về máy)</button>
