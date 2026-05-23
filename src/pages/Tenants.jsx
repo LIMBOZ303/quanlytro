@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import axiosClient from '../api/axiosClient';
-import PageLoader, { PageError } from '../components/PageLoader';
+import { TableSkeleton, PageError } from '../components/PageLoader';
 import ConfirmDialog from '../components/ConfirmDialog';
+import EmptyState from '../components/EmptyState';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -180,206 +182,284 @@ const Tenants = () => {
     }
   };
 
-  const inputErrorClass = (field) =>
-    formErrors[field]
-      ? 'border-red-400 focus:ring-red-500'
-      : 'border-slate-300 focus:ring-indigo-500';
+  const inputClass = (field) =>
+    `input-field ${formErrors[field] ? 'input-error' : ''}`;
 
   if (loading) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-100">
-        <PageLoader label="Đang tải danh sách khách thuê..." />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (error) {
     return <PageError message={error} onRetry={fetchData} />;
   }
 
+  const hasTenants = Array.isArray(tenants) && tenants.length > 0;
+
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-slate-50/50">
-        <h3 className="text-lg font-semibold text-slate-800">Danh sách Khách Thuê</h3>
-        <button
-          onClick={openAddModal}
-          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2.5 rounded-lg transition-colors text-sm font-medium w-full sm:w-auto"
-        >
-          <Plus size={16} /> Thêm Khách
+    <div className="ds-card overflow-hidden">
+      <div className="p-4 md:p-6 border-b border-[var(--color-outline)] flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-[var(--color-surface-container-low)]/40">
+        <div>
+          <h1 className="ds-section-title text-xl">Danh sách khách thuê</h1>
+          <p className="text-[13px] text-[var(--color-muted)] mt-0.5">{tenants.length} khách trong hệ thống</p>
+        </div>
+        <button type="button" onClick={openAddModal} className="btn-primary w-full sm:w-auto">
+          <Plus size={16} /> Thêm khách
         </button>
       </div>
 
-      {/* Mobile: Card list */}
-      <div className="md:hidden divide-y divide-slate-100">
-        {!Array.isArray(tenants) || tenants.length === 0 ? (
-          <p className="text-center py-8 text-slate-500 px-4">Chưa có dữ liệu</p>
-        ) : tenants.map(tenant => (
-          <div key={tenant.id} className="p-4">
-            <div className="flex justify-between items-start gap-2 mb-2">
-              <h4 className="font-semibold text-slate-800 text-base">{tenant.fullName}</h4>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => handleEdit(tenant)} className="p-2 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100" aria-label="Sửa">
-                  <Edit2 size={18} />
-                </button>
-                <button onClick={() => openDeleteConfirm(tenant.id)} className="p-2 rounded-lg bg-red-50 text-red-600 active:bg-red-100" aria-label="Xóa">
-                  <Trash2 size={18} />
-                </button>
+      <div className="md:hidden divide-y divide-[var(--color-outline)]">
+        {!hasTenants ? (
+          <EmptyState title="Chưa có khách thuê" description="Thêm khách để quản lý hợp đồng và hóa đơn." />
+        ) : (
+          tenants.map((tenant) => (
+            <div key={tenant.id} className="p-4">
+              <div className="flex justify-between items-start gap-2 mb-2">
+                <h4 className="font-semibold text-[var(--color-on-surface)]">{tenant.fullName}</h4>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(tenant)}
+                    className="p-2 rounded-lg bg-blue-50 text-blue-600"
+                    aria-label="Sửa"
+                  >
+                    <Edit2 size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDeleteConfirm(tenant.id)}
+                    className="p-2 rounded-lg bg-red-50 text-red-600"
+                    aria-label="Xóa"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+              {tenant.room ? (
+                <span className="inline-block mb-2 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[var(--color-primary-tint)] text-[var(--color-primary)]">
+                  {tenant.room.name}
+                </span>
+              ) : (
+                <span className="inline-block mb-2 text-[var(--color-muted)] italic text-xs">
+                  Chưa gán phòng
+                </span>
+              )}
+              <div className="space-y-1 text-[13px] text-[var(--color-on-surface-variant)]">
+                <p>
+                  Năm sinh: {tenant.birthYear} · Quê: {tenant.hometown}
+                </p>
+                <p>SĐT: {tenant.phone}</p>
+                <p>CCCD: {tenant.idCard}</p>
               </div>
             </div>
-            {tenant.room ? (
-              <span className="inline-block mb-2 px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
-                {tenant.room.name}
-              </span>
-            ) : (
-              <span className="inline-block mb-2 text-slate-400 italic text-xs">Chưa gán phòng</span>
-            )}
-            <div className="space-y-1.5 text-sm text-slate-600">
-              <p><span className="text-slate-400">Năm sinh:</span> {tenant.birthYear} · <span className="text-slate-400">Quê:</span> {tenant.hometown}</p>
-              <p><span className="text-slate-400">SĐT:</span> {tenant.phone}</p>
-              <p><span className="text-slate-400">CCCD:</span> {tenant.idCard}</p>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
-      {/* Desktop: Table */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
+        <table className="w-full text-left table-ds">
+          <thead>
             <tr>
-              <th className="px-6 py-4">Họ và Tên</th>
-              <th className="px-6 py-4">Thông tin</th>
-              <th className="px-6 py-4">Liên hệ</th>
-              <th className="px-6 py-4">Phòng</th>
-              <th className="px-6 py-4 text-right">Hành Động</th>
+              <th>Họ và tên</th>
+              <th>Thông tin</th>
+              <th>Liên hệ</th>
+              <th>Phòng</th>
+              <th className="text-right">Hành động</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
-            {!Array.isArray(tenants) || tenants.length === 0 ? (
-              <tr><td colSpan="5" className="text-center py-8 text-slate-500">Chưa có dữ liệu</td></tr>
-            ) : tenants.map(tenant => (
-              <tr key={tenant.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-4 font-medium text-slate-800">{tenant.fullName}</td>
-                <td className="px-6 py-4 text-slate-600">
-                  <p>Năm sinh: {tenant.birthYear}</p>
-                  <p>Quê: {tenant.hometown}</p>
-                </td>
-                <td className="px-6 py-4 text-slate-600">
-                  <p>SĐT: {tenant.phone}</p>
-                  <p>CCCD: {tenant.idCard}</p>
-                </td>
-                <td className="px-6 py-4">
-                  {tenant.room ? (
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
-                      {tenant.room.name}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400 italic">Chưa gán</span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right space-x-3">
-                  <button onClick={() => handleEdit(tenant)} className="text-blue-500 hover:text-blue-700"><Edit2 size={16} /></button>
-                  <button onClick={() => openDeleteConfirm(tenant.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
+          <tbody>
+            {!hasTenants ? (
+              <tr>
+                <td colSpan="5">
+                  <EmptyState title="Chưa có khách thuê" />
                 </td>
               </tr>
-            ))}
+            ) : (
+              tenants.map((tenant) => (
+                <tr key={tenant.id}>
+                  <td className="font-semibold">{tenant.fullName}</td>
+                  <td className="text-[var(--color-on-surface-variant)]">
+                    <p>Năm sinh: {tenant.birthYear}</p>
+                    <p>Quê: {tenant.hometown}</p>
+                  </td>
+                  <td className="text-[var(--color-on-surface-variant)]">
+                    <p>SĐT: {tenant.phone}</p>
+                    <p>CCCD: {tenant.idCard}</p>
+                  </td>
+                  <td>
+                    {tenant.room ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[var(--color-primary-tint)] text-[var(--color-primary)]">
+                        {tenant.room.name}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-muted)] italic text-xs">Chưa gán</span>
+                    )}
+                  </td>
+                  <td className="text-right">
+                    <div className="inline-flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(tenant)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        aria-label="Sửa"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConfirm(tenant.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        aria-label="Xóa"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg p-5 sm:p-6 max-h-[92dvh] overflow-y-auto">
-            <h3 className="text-xl font-bold mb-4">{editingId ? 'Sửa Khách Thuê' : 'Thêm Khách Thuê'}</h3>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {submitError && (
-                <div className="sm:col-span-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {submitError}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.button
+              type="button"
+              className="absolute inset-0 bg-black/50 backdrop-blur-[8px]"
+              onClick={closeModal}
+              aria-label="Đóng"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              className="relative bg-white w-full sm:max-w-lg p-5 sm:p-6 max-h-[92dvh] overflow-y-auto"
+              style={{ borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-modal)' }}
+            >
+              <h3 className="text-xl font-bold mb-4">
+                {editingId ? 'Sửa khách thuê' : 'Thêm khách thuê'}
+              </h3>
+              <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {submitError && (
+                  <div className="sm:col-span-2 rounded-lg border border-red-200 bg-[var(--color-error-light)] px-4 py-3 text-sm text-[var(--color-error)]">
+                    {submitError}
+                  </div>
+                )}
+                <div className="sm:col-span-2">
+                  <label className="ds-label block mb-1.5">Họ và tên</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.fullName}
+                    onChange={(e) => {
+                      setFormData({ ...formData, fullName: e.target.value });
+                      if (formErrors.fullName)
+                        setFormErrors((prev) => {
+                          const n = { ...prev };
+                          delete n.fullName;
+                          return n;
+                        });
+                    }}
+                    className={inputClass('fullName')}
+                  />
+                  {formErrors.fullName && (
+                    <p className="mt-1 text-xs text-[var(--status-overdue)]">{formErrors.fullName}</p>
+                  )}
                 </div>
-              )}
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Họ và Tên</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.fullName}
-                  onChange={e => {
-                    setFormData({ ...formData, fullName: e.target.value });
-                    if (formErrors.fullName) setFormErrors(prev => { const n = { ...prev }; delete n.fullName; return n; });
-                  }}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-base ${inputErrorClass('fullName')}`}
-                />
-                {formErrors.fullName && <p className="mt-1 text-xs text-red-600">{formErrors.fullName}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Năm sinh</label>
-                <input
-                  type="number"
-                  required
-                  value={formData.birthYear}
-                  onChange={e => setFormData({ ...formData, birthYear: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Quê quán</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.hometown}
-                  onChange={e => {
-                    setFormData({ ...formData, hometown: e.target.value });
-                    if (formErrors.hometown) setFormErrors(prev => { const n = { ...prev }; delete n.hometown; return n; });
-                  }}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-base ${inputErrorClass('hometown')}`}
-                />
-                {formErrors.hometown && <p className="mt-1 text-xs text-red-600">{formErrors.hometown}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">CCCD</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  required
-                  maxLength={12}
-                  value={formData.idCard}
-                  onChange={e => handleNumericChange('idCard', e.target.value, 12)}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-base ${inputErrorClass('idCard')}`}
-                />
-                {formErrors.idCard && <p className="mt-1 text-xs text-red-600">{formErrors.idCard}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">SĐT</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  required
-                  maxLength={10}
-                  value={formData.phone}
-                  onChange={e => handleNumericChange('phone', e.target.value, 10)}
-                  className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 text-base ${inputErrorClass('phone')}`}
-                />
-                {formErrors.phone && <p className="mt-1 text-xs text-red-600">{formErrors.phone}</p>}
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Phòng đang ở</label>
-                <select value={formData.roomId} onChange={e => setFormData({ ...formData, roomId: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base">
-                  <option value="">-- Không gán phòng --</option>
-                  {Array.isArray(rooms) && rooms.map(r => (
-                    <option key={r.id} value={r.id}>{r.name} (Giá: {r.rentPrice ? r.rentPrice.toLocaleString() : '0'})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4">
-                <button type="button" onClick={closeModal} disabled={submitting} className="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg font-medium disabled:opacity-50">Hủy</button>
-                <button type="submit" disabled={submitting} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium disabled:opacity-60 disabled:cursor-not-allowed">
-                  {submitting ? 'Đang lưu...' : 'Lưu'}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="ds-label block mb-1.5">Năm sinh</label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.birthYear}
+                    onChange={(e) => setFormData({ ...formData, birthYear: e.target.value })}
+                    className="input-field"
+                  />
+                  {formErrors.birthYear && (
+                    <p className="mt-1 text-xs text-[var(--status-overdue)]">{formErrors.birthYear}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="ds-label block mb-1.5">Quê quán</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.hometown}
+                    onChange={(e) => {
+                      setFormData({ ...formData, hometown: e.target.value });
+                      if (formErrors.hometown)
+                        setFormErrors((prev) => {
+                          const n = { ...prev };
+                          delete n.hometown;
+                          return n;
+                        });
+                    }}
+                    className={inputClass('hometown')}
+                  />
+                  {formErrors.hometown && (
+                    <p className="mt-1 text-xs text-[var(--status-overdue)]">{formErrors.hometown}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="ds-label block mb-1.5">CCCD</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    maxLength={12}
+                    value={formData.idCard}
+                    onChange={(e) => handleNumericChange('idCard', e.target.value, 12)}
+                    className={inputClass('idCard')}
+                  />
+                  {formErrors.idCard && (
+                    <p className="mt-1 text-xs text-[var(--status-overdue)]">{formErrors.idCard}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="ds-label block mb-1.5">SĐT</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    maxLength={10}
+                    value={formData.phone}
+                    onChange={(e) => handleNumericChange('phone', e.target.value, 10)}
+                    className={inputClass('phone')}
+                  />
+                  {formErrors.phone && (
+                    <p className="mt-1 text-xs text-[var(--status-overdue)]">{formErrors.phone}</p>
+                  )}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="ds-label block mb-1.5">Phòng đang ở</label>
+                  <select
+                    value={formData.roomId}
+                    onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
+                    className="input-field"
+                  >
+                    <option value="">-- Không gán phòng --</option>
+                    {Array.isArray(rooms) &&
+                      rooms.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name} (Giá: {(r.rentPrice ?? 0).toLocaleString('vi-VN')})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4">
+                  <button type="button" onClick={closeModal} disabled={submitting} className="btn-ghost">
+                    Hủy
+                  </button>
+                  <button type="submit" disabled={submitting} className="btn-primary">
+                    {submitting ? 'Đang lưu...' : 'Lưu'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       <ConfirmDialog
         open={confirmOpen}

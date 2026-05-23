@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Building2, Lock, User } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import { isAuthenticated, setToken, setUser } from '../utils/auth';
@@ -48,30 +49,67 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-slate-100 p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-[100dvh] flex items-center justify-center p-4 relative overflow-hidden">
+      <div
+        className="absolute inset-0 -z-10"
+        style={{
+          background:
+            'linear-gradient(135deg, var(--color-background) 0%, var(--color-surface-container) 45%, #dce9ff 100%)',
+        }}
+      />
+      <div
+        className="absolute top-0 right-0 w-72 h-72 rounded-full opacity-30 blur-3xl -z-10"
+        style={{ background: 'var(--color-primary-tint)' }}
+      />
+      <div
+        className="absolute bottom-0 left-0 w-96 h-96 rounded-full opacity-20 blur-3xl -z-10"
+        style={{ background: 'var(--color-secondary)' }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="w-full max-w-md"
+      >
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 mb-4">
+          <motion.div
+            whileHover={{ scale: 1.03 }}
+            className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[var(--color-primary)] text-white mb-4"
+            style={{ boxShadow: 'var(--shadow-modal)' }}
+          >
             <Building2 size={28} />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800">Quản Lý Phòng Trọ</h1>
-          <p className="text-slate-500 mt-1 text-sm">Đăng nhập để tiếp tục</p>
+          </motion.div>
+          <h1 className="text-2xl font-bold text-[var(--color-on-surface)]">Quản Lý Phòng Trọ</h1>
+          <p className="text-[var(--color-on-surface-variant)] mt-1 text-sm">
+            Đăng nhập để tiếp tục quản lý
+          </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 p-6 sm:p-8">
+        <div
+          className="bg-white p-6 sm:p-8 border border-[var(--color-outline)]"
+          style={{ borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-modal)' }}
+        >
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="rounded-lg border border-red-200 bg-[var(--color-error-light)] px-4 py-3 text-sm text-[var(--color-error)]"
+              >
                 {error}
-              </div>
+              </motion.div>
             )}
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label htmlFor="username" className="ds-label block mb-1.5">
                 Tên đăng nhập
               </label>
               <div className="relative">
-                <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <User
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]"
+                />
                 <input
                   id="username"
                   type="text"
@@ -80,18 +118,21 @@ const Login = () => {
                   disabled={loading}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  className="input-field !pl-10 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-[var(--color-surface-container-low)]"
                   placeholder="admin"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label htmlFor="password" className="ds-label block mb-1.5">
                 Mật khẩu
               </label>
               <div className="relative">
-                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Lock
+                  size={18}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]"
+                />
                 <input
                   id="password"
                   type="password"
@@ -100,16 +141,18 @@ const Login = () => {
                   disabled={loading}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  className="input-field !pl-10 disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-[var(--color-surface-container-low)]"
                   placeholder="••••••••"
                 />
               </div>
             </div>
 
-            <button
+            <motion.button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              whileHover={{ scale: loading ? 1 : 1.01 }}
+              whileTap={{ scale: loading ? 1 : 0.99 }}
+              className="btn-primary w-full !py-3"
             >
               {loading ? (
                 <>
@@ -119,14 +162,14 @@ const Login = () => {
               ) : (
                 'Đăng nhập'
               )}
-            </button>
+            </motion.button>
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-400 mt-6">
+        <p className="text-center text-xs text-[var(--color-muted)] mt-6">
           Mặc định: admin / admin123
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 };
