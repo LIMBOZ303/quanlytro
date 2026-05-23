@@ -28,6 +28,12 @@ const Tenants = () => {
     fetchData();
   }, []);
 
+  const openAddModal = () => {
+    setEditingId(null);
+    setFormData({ fullName: '', birthYear: '', hometown: '', idCard: '', phone: '', roomId: '' });
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -81,17 +87,51 @@ const Tenants = () => {
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-      <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+      <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-slate-50/50">
         <h3 className="text-lg font-semibold text-slate-800">Danh sách Khách Thuê</h3>
         <button
-          onClick={() => { setEditingId(null); setFormData({ fullName: '', birthYear: '', hometown: '', idCard: '', phone: '', roomId: '' }); setIsModalOpen(true); }}
-          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+          onClick={openAddModal}
+          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2.5 rounded-lg transition-colors text-sm font-medium w-full sm:w-auto"
         >
           <Plus size={16} /> Thêm Khách
         </button>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Mobile: Card list */}
+      <div className="md:hidden divide-y divide-slate-100">
+        {!Array.isArray(tenants) || tenants.length === 0 ? (
+          <p className="text-center py-8 text-slate-500 px-4">Chưa có dữ liệu</p>
+        ) : tenants.map(tenant => (
+          <div key={tenant.id} className="p-4">
+            <div className="flex justify-between items-start gap-2 mb-2">
+              <h4 className="font-semibold text-slate-800 text-base">{tenant.fullName}</h4>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => handleEdit(tenant)} className="p-2 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100" aria-label="Sửa">
+                  <Edit2 size={18} />
+                </button>
+                <button onClick={() => handleDelete(tenant.id)} className="p-2 rounded-lg bg-red-50 text-red-600 active:bg-red-100" aria-label="Xóa">
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            </div>
+            {tenant.room ? (
+              <span className="inline-block mb-2 px-2.5 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100">
+                {tenant.room.name}
+              </span>
+            ) : (
+              <span className="inline-block mb-2 text-slate-400 italic text-xs">Chưa gán phòng</span>
+            )}
+            <div className="space-y-1.5 text-sm text-slate-600">
+              <p><span className="text-slate-400">Năm sinh:</span> {tenant.birthYear} · <span className="text-slate-400">Quê:</span> {tenant.hometown}</p>
+              <p><span className="text-slate-400">SĐT:</span> {tenant.phone}</p>
+              <p><span className="text-slate-400">CCCD:</span> {tenant.idCard}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: Table */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-100">
             <tr>
@@ -135,44 +175,43 @@ const Tenants = () => {
         </table>
       </div>
 
-      {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-lg p-5 sm:p-6 max-h-[92dvh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">{editingId ? 'Sửa Khách Thuê' : 'Thêm Khách Thuê'}</h3>
-            <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-              <div className="col-span-2">
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Họ và Tên</label>
-                <input type="text" required value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.fullName} onChange={e => setFormData({ ...formData, fullName: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Năm sinh</label>
-                <input type="number" required value={formData.birthYear} onChange={e => setFormData({ ...formData, birthYear: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="number" required value={formData.birthYear} onChange={e => setFormData({ ...formData, birthYear: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Quê quán</label>
-                <input type="text" required value={formData.hometown} onChange={e => setFormData({ ...formData, hometown: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.hometown} onChange={e => setFormData({ ...formData, hometown: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">CCCD</label>
-                <input type="text" required value={formData.idCard} onChange={e => setFormData({ ...formData, idCard: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.idCard} onChange={e => setFormData({ ...formData, idCard: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">SĐT</label>
-                <input type="text" required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input type="text" required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base" />
               </div>
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Phòng đang ở</label>
-                <select value={formData.roomId} onChange={e => setFormData({ ...formData, roomId: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <select value={formData.roomId} onChange={e => setFormData({ ...formData, roomId: e.target.value })} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base">
                   <option value="">-- Không gán phòng --</option>
                   {Array.isArray(rooms) && rooms.map(r => (
                     <option key={r.id} value={r.id}>{r.name} (Giá: {r.rentPrice ? r.rentPrice.toLocaleString() : '0'})</option>
                   ))}
                 </select>
               </div>
-              <div className="col-span-2 flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Hủy</button>
-                <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Lưu</button>
+              <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">Hủy</button>
+                <button type="submit" className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Lưu</button>
               </div>
             </form>
           </div>
