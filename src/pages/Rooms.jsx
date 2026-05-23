@@ -1,20 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import axiosClient from '../api/axiosClient';
+import PageLoader, { PageError } from '../components/PageLoader';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 
 const Rooms = () => {
   const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', rentPrice: '', serviceFee: '', status: 'Trống' });
   const [editingId, setEditingId] = useState(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
 
   const fetchRooms = async () => {
+    setLoading(true);
+    setError('');
     try {
       const res = await axiosClient.get('/rooms');
       setRooms(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Error fetching rooms:', err);
       setRooms([]);
+      setError(err?.response?.data?.message || 'Không thể tải danh sách phòng.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -58,17 +71,47 @@ const Rooms = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc muốn xóa phòng này?')) {
-      try {
-        await axiosClient.delete(`/rooms/${id}`);
-        fetchRooms();
-      } catch (err) {
-        console.error('Error deleting room:', err);
-        alert('Có lỗi xảy ra khi xóa phòng!');
-      }
+  const openDeleteConfirm = (id) => {
+    setDeleteId(id);
+    setConfirmError('');
+    setConfirmOpen(true);
+  };
+
+  const closeDeleteConfirm = () => {
+    if (confirmLoading) return;
+    setConfirmOpen(false);
+    setDeleteId(null);
+    setConfirmError('');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteId) return;
+    setConfirmLoading(true);
+    setConfirmError('');
+    try {
+      await axiosClient.delete(`/rooms/${deleteId}`);
+      setConfirmOpen(false);
+      setDeleteId(null);
+      fetchRooms();
+    } catch (err) {
+      console.error('Error deleting room:', err);
+      setConfirmError(err?.response?.data?.message || 'Có lỗi xảy ra khi xóa phòng.');
+    } finally {
+      setConfirmLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100">
+        <PageLoader label="Đang tải danh sách phòng..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <PageError message={error} onRetry={fetchRooms} />;
+  }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -99,7 +142,7 @@ const Rooms = () => {
                 <button onClick={() => handleEdit(room)} className="p-2 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100" aria-label="Sửa">
                   <Edit2 size={18} />
                 </button>
-                <button onClick={() => handleDelete(room.id)} className="p-2 rounded-lg bg-red-50 text-red-600 active:bg-red-100" aria-label="Xóa">
+                <button onClick={() => openDeleteConfirm(room.id)} className="p-2 rounded-lg bg-red-50 text-red-600 active:bg-red-100" aria-label="Xóa">
                   <Trash2 size={18} />
                 </button>
               </div>
@@ -145,7 +188,7 @@ const Rooms = () => {
                 </td>
                 <td className="px-6 py-4 text-right space-x-3">
                   <button onClick={() => handleEdit(room)} className="text-blue-500 hover:text-blue-700"><Edit2 size={16} /></button>
-                  <button onClick={() => handleDelete(room.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
+                  <button onClick={() => openDeleteConfirm(room.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
                 </td>
               </tr>
             ))}
@@ -178,6 +221,19 @@ const Rooms = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Xóa phòng?"
+        message="Bạn có chắc muốn xóa phòng này không? Hành động này không thể hoàn tác."
+        confirmText="Xóa phòng"
+        cancelText="Hủy"
+        danger
+        loading={confirmLoading}
+        error={confirmError}
+        onConfirm={handleConfirmDelete}
+        onCancel={closeDeleteConfirm}
+      />
     </div>
   );
 };

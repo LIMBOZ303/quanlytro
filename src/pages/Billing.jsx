@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axiosClient from '../api/axiosClient';
 import { getBillApiErrorMessage } from '../api/billApi';
+import PageLoader, { PageError } from '../components/PageLoader';
 import html2canvas from 'html2canvas';
 import { Download } from 'lucide-react';
 import BillReceipt from '../components/BillReceipt';
@@ -18,6 +19,8 @@ import {
 const Billing = () => {
   const [rooms, setRooms] = useState([]);
   const [bills, setBills] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -27,6 +30,8 @@ const Billing = () => {
   const billRef = useRef(null);
 
   const fetchData = async () => {
+    setLoading(true);
+    setError('');
     try {
       const [rRes, bRes] = await Promise.all([
         axiosClient.get('/rooms'),
@@ -39,6 +44,9 @@ const Billing = () => {
       console.error('Error fetching billing data:', err);
       setRooms([]);
       setBills([]);
+      setError(err?.response?.data?.message || 'Không thể tải dữ liệu tính tiền.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -132,6 +140,14 @@ const Billing = () => {
   };
 
   const formatBillTotal = (bill) => formatCurrency(bill?.totalAmount ?? 0);
+
+  if (loading) {
+    return <PageLoader label="Đang tải hóa đơn..." />;
+  }
+
+  if (error) {
+    return <PageError message={error} onRetry={fetchData} />;
+  }
 
   return (
     <div className="space-y-4 md:space-y-6">

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axiosClient from '../api/axiosClient';
-import { Home, Users, DollarSign, Activity } from 'lucide-react';
+import PageLoader, { PageError } from '../components/PageLoader';
+import { Home, Users, Activity } from 'lucide-react';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -8,27 +9,37 @@ const Dashboard = () => {
     rentedRooms: 0,
     totalTenants: 0,
   });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [roomsRes, tenantsRes] = await Promise.all([
+        axiosClient.get('/rooms'),
+        axiosClient.get('/tenants'),
+      ]);
+
+      const rooms = Array.isArray(roomsRes?.data) ? roomsRes.data : [];
+      const tenants = Array.isArray(tenantsRes?.data) ? tenantsRes.data : [];
+
+      setStats({
+        totalRooms: rooms.length,
+        rentedRooms: rooms.filter((r) => r.status === 'Đã thuê').length,
+        totalTenants: tenants.length,
+      });
+    } catch (err) {
+      console.error('Error fetching dashboard stats:', err);
+      setError(
+        err?.response?.data?.message || 'Không thể tải thống kê. Vui lòng thử lại sau.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [roomsRes, tenantsRes] = await Promise.all([
-          axiosClient.get('/rooms'),
-          axiosClient.get('/tenants')
-        ]);
-
-        const rooms = Array.isArray(roomsRes?.data) ? roomsRes.data : [];
-        const tenants = Array.isArray(tenantsRes?.data) ? tenantsRes.data : [];
-
-        setStats({
-          totalRooms: rooms.length,
-          rentedRooms: rooms.filter(r => r.status === 'Đã thuê').length,
-          totalTenants: tenants.length,
-        });
-      } catch (err) {
-        console.error('Error fetching dashboard stats:', err);
-      }
-    };
     fetchData();
   }, []);
 
@@ -37,6 +48,14 @@ const Dashboard = () => {
     { title: 'Phòng đã thuê', value: stats.rentedRooms, icon: Activity, color: 'bg-emerald-500' },
     { title: 'Số lượng khách', value: stats.totalTenants, icon: Users, color: 'bg-purple-500' },
   ];
+
+  if (loading) {
+    return <PageLoader label="Đang tải bảng điều khiển..." />;
+  }
+
+  if (error) {
+    return <PageError message={error} onRetry={fetchData} />;
+  }
 
   return (
     <div className="space-y-4 md:space-y-6">

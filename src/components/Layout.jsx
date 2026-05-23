@@ -1,9 +1,19 @@
 import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, HomeIcon, Users, FileText } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Home, HomeIcon, Users, FileText, LogOut } from 'lucide-react';
+import { getUser, logout } from '../utils/auth';
 
 const Layout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const user = getUser();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
+  const userInitial = (user?.username || 'A').charAt(0).toUpperCase();
 
   const navItems = [
     { path: '/', label: 'Tổng quan', shortLabel: 'Tổng quan', icon: Home },
@@ -51,10 +61,24 @@ const Layout = () => {
           <h2 className="text-base md:text-lg font-semibold text-slate-800 truncate">
             {currentPage?.label || 'Bảng điều khiển'}
           </h2>
-          <div className="flex items-center gap-4 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-              A
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {user?.username && (
+              <span className="hidden sm:inline text-sm text-slate-600 truncate max-w-[120px]">
+                {user.username}
+              </span>
+            )}
+            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm" title={user?.username || ''}>
+              {userInitial}
             </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Đăng xuất"
+            >
+              <LogOut size={18} />
+              <span className="hidden sm:inline">Đăng xuất</span>
+            </button>
           </div>
         </header>
 
