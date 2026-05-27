@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { TableSkeleton, PageError } from '../components/PageLoader';
 import ConfirmDialog from '../components/ConfirmDialog';
-import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import RoomCard from '../components/RoomCard';
+import { Plus } from 'lucide-react';
 
 const Rooms = () => {
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
+  const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,11 +26,26 @@ const Rooms = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await axiosClient.get('/rooms');
-      setRooms(Array.isArray(res.data) ? res.data : []);
+      const [roomsRes, tenantsRes] = await Promise.allSettled([
+        axiosClient.get('/rooms'),
+        axiosClient.get('/tenants'),
+      ]);
+
+      const roomList =
+        roomsRes.status === 'fulfilled' && Array.isArray(roomsRes.value?.data)
+          ? roomsRes.value.data
+          : [];
+      const tenantList =
+        tenantsRes.status === 'fulfilled' && Array.isArray(tenantsRes.value?.data)
+          ? tenantsRes.value.data
+          : [];
+
+      setRooms(roomList);
+      setTenants(tenantList);
     } catch (err) {
       console.error('Error fetching rooms:', err);
       setRooms([]);
+      setTenants([]);
       setError(err?.response?.data?.message || 'Không thể tải danh sách phòng.');
     } finally {
       setLoading(false);
@@ -117,6 +135,18 @@ const Rooms = () => {
     return <PageError message={error} onRetry={fetchRooms} />;
   }
 
+  const tenantsByRoomId = new Map();
+  tenants.forEach((tenant) => {
+    if (tenant?.roomId && !tenantsByRoomId.has(tenant.roomId)) {
+      tenantsByRoomId.set(tenant.roomId, tenant);
+    }
+  });
+
+  const roomsWithTenant = rooms.map((room) => ({
+    ...room,
+    currentTenant: room.tenant || room.tenants?.[0] || tenantsByRoomId.get(room.id) || null,
+  }));
+
   const hasRooms = Array.isArray(rooms) && rooms.length > 0;
 
   return (
@@ -131,113 +161,23 @@ const Rooms = () => {
         </button>
       </div>
 
-      <div className="md:hidden divide-y divide-[var(--color-outline)]">
+      <div className="p-4 md:p-6">
         {!hasRooms ? (
           <EmptyState title="Chưa có dữ liệu phòng" description="Nhấn Thêm phòng để bắt đầu." />
         ) : (
-          rooms.map((room) => (
-            <div key={room.id} className="p-4">
-              <div className="flex justify-between items-start gap-2 mb-3">
-                <div>
-                  <h4 className="font-semibold text-[var(--color-on-surface)]">{room.name}</h4>
-                  <div className="mt-1">
-                    <StatusBadge status={room.status} />
-                  </div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(room)}
-                    className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                    aria-label="Sửa"
-                  >
-                    <Edit2 size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openDeleteConfirm(room.id)}
-                    className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                    aria-label="Xóa"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-lg p-2.5 bg-[var(--color-surface-container-low)]">
-                  <p className="ds-label text-[var(--color-muted)]">Giá thuê</p>
-                  <p className="font-semibold tabular-nums">
-                    {(room.rentPrice ?? 0).toLocaleString('vi-VN')} đ
-                  </p>
-                </div>
-                <div className="rounded-lg p-2.5 bg-[var(--color-surface-container-low)]">
-                  <p className="ds-label text-[var(--color-muted)]">Phí DV</p>
-                  <p className="font-semibold tabular-nums">
-                    {(room.serviceFee ?? 0).toLocaleString('vi-VN')} đ
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {roomsWithTenant.map((room) => (
+              <RoomCard
+                key={room.id}
+                room={room}
+                tenant={room.currentTenant}
+                onEdit={handleEdit}
+                onDelete={openDeleteConfirm}
+                onCreateBill={(targetRoom) => navigate(`/billing?roomId=${targetRoom.id}`)}
+              />
+            ))}
+          </div>
         )}
-      </div>
-
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-left table-ds">
-          <thead>
-            <tr>
-              <th>Tên phòng</th>
-              <th>Giá thuê (VNĐ)</th>
-              <th>Phí dịch vụ (VNĐ)</th>
-              <th>Trạng thái</th>
-              <th className="text-right">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!hasRooms ? (
-              <tr>
-                <td colSpan="5">
-                  <EmptyState title="Chưa có dữ liệu phòng" />
-                </td>
-              </tr>
-            ) : (
-              rooms.map((room) => (
-                <tr key={room.id}>
-                  <td className="font-semibold text-[var(--color-on-surface)]">{room.name}</td>
-                  <td className="tabular-nums text-[var(--color-on-surface-variant)]">
-                    {(room.rentPrice ?? 0).toLocaleString('vi-VN')}
-                  </td>
-                  <td className="tabular-nums text-[var(--color-on-surface-variant)]">
-                    {(room.serviceFee ?? 0).toLocaleString('vi-VN')}
-                  </td>
-                  <td>
-                    <StatusBadge status={room.status} />
-                  </td>
-                  <td className="text-right">
-                    <div className="inline-flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEdit(room)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        aria-label="Sửa"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openDeleteConfirm(room.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        aria-label="Xóa"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
 
       <AnimatePresence>
@@ -292,6 +232,19 @@ const Rooms = () => {
                     onChange={(e) => setFormData({ ...formData, serviceFee: e.target.value })}
                     className="input-field tabular-nums"
                   />
+                </div>
+                <div>
+                  <label className="ds-label block mb-1.5">Trạng thái</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="input-field"
+                  >
+                    <option value="Trống">Trống</option>
+                    <option value="Đã thuê">Đã thuê</option>
+                    <option value="Chưa thanh toán">Chưa thanh toán</option>
+                    <option value="Quá hạn">Quá hạn</option>
+                  </select>
                 </div>
                 <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 safe-bottom">
                   <button type="button" onClick={() => setIsModalOpen(false)} className="btn-ghost">

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
 import { getBillApiErrorMessage } from '../api/billApi';
 import PageLoader, { PageError } from '../components/PageLoader';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
 import html2canvas from 'html2canvas';
-import { Download, Plus, CheckCircle, CircleAlert } from 'lucide-react';
+import { Download, Plus, CheckCircle, CircleAlert, Eye } from 'lucide-react';
 import BillReceipt from '../components/BillReceipt';
 import {
   INITIAL_BILL_FORM,
@@ -20,6 +21,8 @@ import {
 } from '../utils/billCalculator';
 
 const Billing = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState([]);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,11 +90,20 @@ const Billing = () => {
     [formData.electricityPrice, formData.waterPrice]
   );
 
-  const openCreateModal = () => {
-    setFormData({ ...INITIAL_BILL_FORM });
+  const openCreateModal = (roomId = '') => {
+    setFormData({ ...INITIAL_BILL_FORM, roomId: roomId ? String(roomId) : '' });
     setFormErrors([]);
     setIsModalOpen(true);
   };
+
+  useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const roomId = query.get('roomId');
+    if (roomId && Array.isArray(rooms) && rooms.some((room) => String(room.id) === String(roomId))) {
+      openCreateModal(roomId);
+      navigate('/billing', { replace: true });
+    }
+  }, [location.search, rooms, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -236,6 +248,9 @@ const Billing = () => {
                   <h4 className="font-bold text-[var(--color-on-surface)]">
                     {bill.room?.name || 'Không xác định'}
                   </h4>
+                  <p className="text-xs text-[var(--color-muted)] mt-1">
+                    Khách thuê: {bill.tenant?.fullName || bill.tenantName || 'Chưa cập nhật'}
+                  </p>
                   <div className="mt-1">
                     <StatusBadge status={bill.status || 'Chưa thanh toán'} />
                   </div>
@@ -259,6 +274,13 @@ const Billing = () => {
                 </div>
               </div>
               <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBillToExport(bill)}
+                  className="btn-secondary w-full text-sm"
+                >
+                  <Eye size={16} /> Xem chi tiết
+                </button>
                 <button
                   type="button"
                   onClick={() => handleToggleStatus(bill)}
@@ -293,6 +315,7 @@ const Billing = () => {
           <thead>
             <tr>
               <th>Phòng</th>
+              <th>Khách thuê</th>
               <th>Số điện (cũ → mới)</th>
               <th>Số nước (cũ → mới)</th>
               <th>Tổng tiền</th>
@@ -303,7 +326,7 @@ const Billing = () => {
           <tbody>
             {!hasBills ? (
               <tr>
-                <td colSpan="6">
+                <td colSpan="7">
                   <EmptyState title="Chưa có hóa đơn cho tháng này" />
                 </td>
               </tr>
@@ -311,6 +334,7 @@ const Billing = () => {
               bills.map((bill) => (
                 <tr key={bill.id}>
                   <td className="font-bold">{bill.room?.name || 'Không xác định'}</td>
+                  <td>{bill.tenant?.fullName || bill.tenantName || '—'}</td>
                   <td className="tabular-nums">
                     {bill.electricityOld} → {bill.electricityNew}
                   </td>
@@ -327,6 +351,13 @@ const Billing = () => {
                     <div className="inline-flex flex-col items-end gap-1">
                       <button
                         type="button"
+                        onClick={() => setBillToExport(bill)}
+                        className="text-xs font-semibold text-[var(--color-primary)] hover:underline"
+                      >
+                        Xem chi tiết
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleToggleStatus(bill)}
                         disabled={statusUpdatingId === bill.id}
                         className="text-xs font-semibold text-[var(--color-primary)] hover:underline disabled:opacity-50"
@@ -337,13 +368,7 @@ const Billing = () => {
                             ? 'Chưa thanh toán'
                             : 'Đã thanh toán'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setBillToExport(bill)}
-                        className="text-xs font-semibold text-[var(--color-secondary)] hover:underline"
-                      >
-                        Xuất hóa đơn
-                      </button>
+                      <button type="button" onClick={() => setBillToExport(bill)} className="text-xs font-semibold text-[var(--color-secondary)] hover:underline">Xuất hóa đơn</button>
                     </div>
                   </td>
                 </tr>
@@ -368,12 +393,8 @@ const Billing = () => {
               className="relative bg-white w-full sm:max-w-xl p-5 sm:p-6 max-h-[92dvh] overflow-y-auto"
               style={{ borderRadius: 'var(--radius-modal)', boxShadow: 'var(--shadow-modal)' }}
             >
-              <h3 className="text-xl font-bold mb-2">
-                Tính tiền tháng {selectedMonth}/{selectedYear}
-              </h3>
-              <p className="text-sm text-[var(--color-muted)] mb-4">
-                Điện/nước tính theo đơn giá cố định, không áp dụng bậc thang.
-              </p>
+              <h3 className="text-xl font-bold mb-1">Lập hóa đơn tháng {selectedMonth}/{selectedYear}</h3>
+              <p className="text-sm text-[var(--color-muted)] mb-4">Nhập chỉ số cũ/mới để xem trước. Backend sẽ là nơi tính tổng cuối cùng.</p>
 
               {formErrors.length > 0 && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-[var(--color-error-light)] p-3 text-sm text-[var(--color-error)] space-y-1">
@@ -385,7 +406,7 @@ const Billing = () => {
 
               <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="ds-label block mb-1.5">Chọn phòng (chỉ phòng đã thuê)</label>
+                  <label className="ds-label block mb-1.5">Phòng đang thuê</label>
                   <select
                     required
                     value={formData.roomId}
@@ -396,11 +417,23 @@ const Billing = () => {
                     {Array.isArray(rooms) &&
                       rooms.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name}
+                          {r.name} · {Number(r.rentPrice || 0).toLocaleString('vi-VN')} đ
                         </option>
                       ))}
                   </select>
                 </div>
+                {selectedRoom && (
+                  <div className="sm:col-span-2 rounded-lg border border-[var(--color-outline)] bg-[var(--color-surface-container-low)] p-3 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="font-semibold text-[var(--color-on-surface)]">{selectedRoom.name}</p>
+                      <StatusBadge status={selectedRoom.status} />
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[var(--color-on-surface-variant)]">
+                      <p>Tiền phòng: <span className="font-semibold">{formatCurrency(selectedRoom.rentPrice)}</span></p>
+                      <p>Phí dịch vụ: <span className="font-semibold">{formatCurrency(selectedRoom.serviceFee)}</span></p>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="ds-label block mb-1.5">Số điện cũ</label>
                   <input
@@ -482,7 +515,7 @@ const Billing = () => {
 
                 {formPreview && (
                   <div className="sm:col-span-2 rounded-lg border border-[var(--color-outline)] bg-[var(--color-surface-container-low)] p-4 text-sm space-y-2">
-                    <p className="font-semibold text-[var(--color-primary)]">Xem trước tổng tiền</p>
+                    <p className="font-semibold text-[var(--color-primary)]">Xem trước chi tiết hóa đơn</p>
                     <div className="flex justify-between gap-3">
                       <span>Tiền phòng</span>
                       <span className="tabular-nums font-medium">
@@ -514,9 +547,12 @@ const Billing = () => {
                       </span>
                     </div>
                     <div className="flex justify-between font-bold text-[var(--color-primary)] pt-2 border-t border-[var(--color-outline)]">
-                      <span>Tổng cộng</span>
+                      <span>Tổng tạm tính frontend</span>
                       <span className="tabular-nums">{formatCurrency(formPreview.totalAmount)}</span>
                     </div>
+                    <p className="text-[11px] text-[var(--color-muted)]">
+                      Lưu ý: tổng tiền chính thức lấy từ backend sau khi lưu.
+                    </p>
                   </div>
                 )}
 

@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -64,6 +65,30 @@
     border: 1px solid var(--color-outline);
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-card);
+  }
+
+  .room-card {
+    background: #fff;
+    border: 1px solid var(--color-outline);
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .room-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  }
+
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    transition: background 0.2s;
   }
 
   .ds-page-title {
