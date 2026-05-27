@@ -6,6 +6,8 @@ import { getBillApiErrorMessage } from '../api/billApi';
 import PageLoader, { PageError } from '../components/PageLoader';
 import StatusBadge from '../components/StatusBadge';
 import EmptyState from '../components/EmptyState';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { useToast } from '../components/ToastProvider';
 import html2canvas from 'html2canvas';
 import { Download, Plus, CheckCircle, CircleAlert, Eye } from 'lucide-react';
 import BillReceipt from '../components/BillReceipt';
@@ -18,12 +20,36 @@ import {
   HIGH_ELECTRICITY_PRICE_THRESHOLD,
   HIGH_WATER_PRICE_THRESHOLD,
   validateBillForm,
+  WATER_BILLING_METER,
+  WATER_BILLING_PER_PERSON,
+  DEFAULT_WATER_PER_PERSON_PRICE,
 } from '../utils/billCalculator';
+
+const getTenantsForRoom = (roomId, allTenants, selectedRoom) => {
+  if (Array.isArray(selectedRoom?.tenants) && selectedRoom.tenants.length > 0) {
+    return selectedRoom.tenants;
+  }
+  if (!roomId || !Array.isArray(allTenants)) return [];
+  return allTenants.filter((t) => String(t.roomId) === String(roomId));
+};
+
+const formatWaterSummary = (bill) => {
+  if (bill.waterBillingType === WATER_BILLING_PER_PERSON) {
+    const count = bill.waterPeopleCount ?? '—';
+    const price = Number(bill.waterPrice || 0).toLocaleString('vi-VN');
+    return `${count} người × ${price}đ`;
+  }
+  const oldVal = bill.waterOld ?? '—';
+  const newVal = bill.waterNew ?? '—';
+  return `${oldVal} → ${newVal}`;
+};
 
 const Billing = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [rooms, setRooms] = useState([]);
+  const [allTenants, setAllTenants] = useState([]);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,23 +60,28 @@ const Billing = () => {
   const [formErrors, setFormErrors] = useState([]);
   const [billToExport, setBillToExport] = useState(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [priceConfirmOpen, setPriceConfirmOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
   const billRef = useRef(null);
 
   const fetchData = async () => {
     setLoading(true);
     setError('');
     try {
-      const [rRes, bRes] = await Promise.all([
+      const [rRes, bRes, tRes] = await Promise.all([
         axiosClient.get('/rooms'),
         axiosClient.get(`/bills?month=${selectedMonth}&year=${selectedYear}`),
+        axiosClient.get('/tenants'),
       ]);
       const roomsData = Array.isArray(rRes?.data) ? rRes.data : [];
       setRooms(roomsData.filter((r) => r.status === 'Đã thuê'));
       setBills(Array.isArray(bRes?.data) ? bRes.data : []);
+      setAllTenants(Array.isArray(tRes?.data) ? tRes.data : []);
     } catch (err) {
       console.error('Error fetching billing data:', err);
       setRooms([]);
       setBills([]);
+      setAllTenants([]);
       setError(err?.response?.data?.message || 'Không thể tải dữ liệu tính tiền.');
     } finally {
       setLoading(false);
@@ -67,6 +98,11 @@ const Billing = () => {
     [rooms, formData.roomId]
   );
 
+  const roomTenantCount = useMemo(() => {
+    const list = getTenantsForRoom(formData.roomId, allTenants, selectedRoom);
+    return Math.max(1, list.length);
+  }, [formData.roomId, allTenants, selectedRoom]);
+
   const formPreview = useMemo(() => {
     if (!selectedRoom) return null;
     try {
@@ -76,9 +112,11 @@ const Billing = () => {
         electricityOld: formData.electricityOld,
         electricityNew: formData.electricityNew,
         electricityPrice: formData.electricityPrice,
+        waterBillingType: formData.waterBillingType,
         waterOld: formData.waterOld,
         waterNew: formData.waterNew,
         waterPrice: formData.waterPrice,
+        waterPeopleCount: formData.waterPeopleCount,
       });
     } catch {
       return null;
@@ -86,8 +124,13 @@ const Billing = () => {
   }, [selectedRoom, formData]);
 
   const priceWarnings = useMemo(
-    () => getHighPriceWarnings(formData.electricityPrice, formData.waterPrice),
-    [formData.electricityPrice, formData.waterPrice]
+    () =>
+      getHighPriceWarnings(
+        formData.electricityPrice,
+        formData.waterPrice,
+        formData.waterBillingType
+      ),
+    [formData.electricityPrice, formData.waterPrice, formData.waterBillingType]
   );
 
   const openCreateModal = (roomId = '') => {
@@ -105,6 +148,53 @@ const Billing = () => {
     }
   }, [location.search, rooms, navigate]);
 
+  const handleWaterBillingTypeChange = (type) => {
+    setFormData((prev) => {
+      const next = { ...prev, waterBillingType: type };
+      if (type === WATER_BILLING_PER_PERSON) {
+        const count = getTenantsForRoom(prev.roomId, allTenants, selectedRoom).length;
+        next.waterPrice = String(DEFAULT_WATER_PER_PERSON_PRICE);
+        next.waterPeopleCount = String(Math.max(1, count || 1));
+      }
+      return next;
+    });
+  };
+
+  const handleRoomChange = (roomId) => {
+    const room = rooms.find((r) => String(r.id) === String(roomId));
+    setFormData((prev) => {
+      const next = { ...prev, roomId };
+      if (prev.waterBillingType === WATER_BILLING_PER_PERSON) {
+        const count = getTenantsForRoom(roomId, allTenants, room).length;
+        next.waterPeopleCount = String(Math.max(1, count || 1));
+      }
+      return next;
+    });
+  };
+
+  const submitBill = async () => {
+    setPendingSubmit(true);
+    try {
+      const payload = buildBillPayload(formData, selectedMonth, selectedYear);
+      await axiosClient.post('/bills', payload);
+      setIsModalOpen(false);
+      setFormData({ ...INITIAL_BILL_FORM });
+      setFormErrors([]);
+      showToast({ type: 'success', message: 'Tạo hóa đơn thành công.' });
+      fetchData();
+    } catch (err) {
+      console.error('Error creating bill:', err);
+      const msg = getBillApiErrorMessage(
+        err,
+        'Có lỗi hoặc phòng này đã được tính tiền cho tháng này!'
+      );
+      showToast({ type: 'error', message: msg });
+    } finally {
+      setPendingSubmit(false);
+      setPriceConfirmOpen(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -114,8 +204,10 @@ const Billing = () => {
       year: selectedYear,
       electricityOld: formData.electricityOld,
       electricityNew: formData.electricityNew,
+      waterBillingType: formData.waterBillingType,
       waterOld: formData.waterOld,
       waterNew: formData.waterNew,
+      waterPeopleCount: formData.waterPeopleCount,
       electricityPrice: formData.electricityPrice,
       waterPrice: formData.waterPrice,
     });
@@ -125,23 +217,17 @@ const Billing = () => {
       return;
     }
 
-    const warnings = getHighPriceWarnings(formData.electricityPrice, formData.waterPrice);
+    const warnings = getHighPriceWarnings(
+      formData.electricityPrice,
+      formData.waterPrice,
+      formData.waterBillingType
+    );
     if (warnings.length > 0) {
-      const confirmed = window.confirm(warnings.join('\n\n'));
-      if (!confirmed) return;
+      setPriceConfirmOpen(true);
+      return;
     }
 
-    try {
-      const payload = buildBillPayload(formData, selectedMonth, selectedYear);
-      await axiosClient.post('/bills', payload);
-      setIsModalOpen(false);
-      setFormData({ ...INITIAL_BILL_FORM });
-      setFormErrors([]);
-      fetchData();
-    } catch (err) {
-      console.error('Error creating bill:', err);
-      alert(getBillApiErrorMessage(err, 'Có lỗi hoặc phòng này đã được tính tiền cho tháng này!'));
-    }
+    await submitBill();
   };
 
   const handleToggleStatus = async (bill) => {
@@ -150,10 +236,17 @@ const Billing = () => {
     setStatusUpdatingId(bill.id);
     try {
       await axiosClient.put(`/bills/${bill.id}/status`, { status: nextStatus });
+      showToast({
+        type: 'success',
+        message: `Đã cập nhật trạng thái: ${nextStatus}.`,
+      });
       fetchData();
     } catch (err) {
       console.error('Error updating bill status:', err);
-      alert(getBillApiErrorMessage(err, 'Không thể cập nhật trạng thái thanh toán.'));
+      showToast({
+        type: 'error',
+        message: getBillApiErrorMessage(err, 'Không thể cập nhật trạng thái thanh toán.'),
+      });
     } finally {
       setStatusUpdatingId(null);
     }
@@ -182,6 +275,7 @@ const Billing = () => {
   }
 
   const hasBills = Array.isArray(bills) && bills.length > 0;
+  const isMeterWater = formData.waterBillingType === WATER_BILLING_METER;
 
   return (
     <motion.div
@@ -227,7 +321,7 @@ const Billing = () => {
             </select>
           </div>
         </div>
-        <button type="button" onClick={openCreateModal} className="btn-primary w-full sm:w-auto shrink-0">
+        <button type="button" onClick={() => openCreateModal()} className="btn-primary w-full sm:w-auto shrink-0">
           <Plus size={16} /> Tính tiền phòng mới
         </button>
       </div>
@@ -267,10 +361,8 @@ const Billing = () => {
                   </p>
                 </div>
                 <div className="rounded-lg p-2 bg-[var(--color-surface-container-low)]">
-                  <p className="text-xs text-[var(--color-muted)]">Nước (cũ → mới)</p>
-                  <p className="font-medium tabular-nums">
-                    {bill.waterOld} → {bill.waterNew}
-                  </p>
+                  <p className="text-xs text-[var(--color-muted)]">Nước</p>
+                  <p className="font-medium tabular-nums">{formatWaterSummary(bill)}</p>
                 </div>
               </div>
               <div className="flex flex-col gap-2">
@@ -317,7 +409,7 @@ const Billing = () => {
               <th>Phòng</th>
               <th>Khách thuê</th>
               <th>Số điện (cũ → mới)</th>
-              <th>Số nước (cũ → mới)</th>
+              <th>Nước</th>
               <th>Tổng tiền</th>
               <th>Trạng thái</th>
               <th className="text-right">Hành động</th>
@@ -338,9 +430,7 @@ const Billing = () => {
                   <td className="tabular-nums">
                     {bill.electricityOld} → {bill.electricityNew}
                   </td>
-                  <td className="tabular-nums">
-                    {bill.waterOld} → {bill.waterNew}
-                  </td>
+                  <td className="tabular-nums">{formatWaterSummary(bill)}</td>
                   <td className="font-bold text-[var(--color-primary)] tabular-nums">
                     {formatBillTotal(bill)}
                   </td>
@@ -384,7 +474,7 @@ const Billing = () => {
             <motion.button
               type="button"
               className="absolute inset-0 bg-black/50 backdrop-blur-[8px]"
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => !pendingSubmit && setIsModalOpen(false)}
             />
             <motion.div
               initial={{ opacity: 0, y: 24 }}
@@ -410,7 +500,7 @@ const Billing = () => {
                   <select
                     required
                     value={formData.roomId}
-                    onChange={(e) => setFormData({ ...formData, roomId: e.target.value })}
+                    onChange={(e) => handleRoomChange(e.target.value)}
                     className="input-field"
                   >
                     <option value="">-- Chọn phòng --</option>
@@ -431,9 +521,45 @@ const Billing = () => {
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-[var(--color-on-surface-variant)]">
                       <p>Tiền phòng: <span className="font-semibold">{formatCurrency(selectedRoom.rentPrice)}</span></p>
                       <p>Phí dịch vụ: <span className="font-semibold">{formatCurrency(selectedRoom.serviceFee)}</span></p>
+                      <p className="sm:col-span-2">Khách trong phòng: <span className="font-semibold">{roomTenantCount}</span></p>
                     </div>
                   </div>
                 )}
+
+                <div className="sm:col-span-2">
+                  <label className="ds-label block mb-1.5">Cách tính tiền nước</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${isMeterWater ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)]' : 'border-[var(--color-outline)]'}`}>
+                      <input
+                        type="radio"
+                        name="waterBillingType"
+                        value={WATER_BILLING_METER}
+                        checked={isMeterWater}
+                        onChange={() => handleWaterBillingTypeChange(WATER_BILLING_METER)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold">Theo đồng hồ nước</span>
+                        <span className="block text-xs text-[var(--color-muted)] mt-0.5">Chỉ số cũ/mới × đơn giá/khối</span>
+                      </span>
+                    </label>
+                    <label className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${!isMeterWater ? 'border-[var(--color-primary)] bg-[var(--color-primary-tint)]' : 'border-[var(--color-outline)]'}`}>
+                      <input
+                        type="radio"
+                        name="waterBillingType"
+                        value={WATER_BILLING_PER_PERSON}
+                        checked={!isMeterWater}
+                        onChange={() => handleWaterBillingTypeChange(WATER_BILLING_PER_PERSON)}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold">Theo đầu người</span>
+                        <span className="block text-xs text-[var(--color-muted)] mt-0.5">Số người × giá/người</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
                 <div>
                   <label className="ds-label block mb-1.5">Số điện cũ</label>
                   <input
@@ -456,29 +582,83 @@ const Billing = () => {
                     className="input-field tabular-nums"
                   />
                 </div>
-                <div>
-                  <label className="ds-label block mb-1.5">Số nước cũ</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.waterOld}
-                    onChange={(e) => setFormData({ ...formData, waterOld: e.target.value })}
-                    className="input-field tabular-nums"
-                  />
-                </div>
-                <div>
-                  <label className="ds-label block mb-1.5">Số nước mới</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.waterNew}
-                    onChange={(e) => setFormData({ ...formData, waterNew: e.target.value })}
-                    className="input-field tabular-nums"
-                  />
-                </div>
-                <div>
+
+                {isMeterWater ? (
+                  <>
+                    <div>
+                      <label className="ds-label block mb-1.5">Số nước cũ</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formData.waterOld}
+                        onChange={(e) => setFormData({ ...formData, waterOld: e.target.value })}
+                        className="input-field tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="ds-label block mb-1.5">Số nước mới</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formData.waterNew}
+                        onChange={(e) => setFormData({ ...formData, waterNew: e.target.value })}
+                        className="input-field tabular-nums"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="ds-label block mb-1.5">Đơn giá nước (VNĐ/khối)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formData.waterPrice}
+                        onChange={(e) => setFormData({ ...formData, waterPrice: e.target.value })}
+                        className="input-field tabular-nums"
+                      />
+                      {Number(formData.waterPrice) > HIGH_WATER_PRICE_THRESHOLD && (
+                        <p className="mt-1 text-xs text-amber-600">
+                          Đơn giá nước có vẻ quá cao, bạn có chắc muốn dùng mức này không?
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="ds-label block mb-1.5">Số người</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={formData.waterPeopleCount}
+                        onChange={(e) =>
+                          setFormData({ ...formData, waterPeopleCount: e.target.value })
+                        }
+                        className="input-field tabular-nums"
+                      />
+                    </div>
+                    <div>
+                      <label className="ds-label block mb-1.5">Giá nước / người (VNĐ)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={formData.waterPrice}
+                        onChange={(e) => setFormData({ ...formData, waterPrice: e.target.value })}
+                        className="input-field tabular-nums"
+                      />
+                      {Number(formData.waterPrice) > HIGH_WATER_PRICE_THRESHOLD && (
+                        <p className="mt-1 text-xs text-amber-600">
+                          Giá nước/người có vẻ quá cao, bạn có chắc muốn dùng mức này không?
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <div className={isMeterWater ? '' : 'sm:col-span-2'}>
                   <label className="ds-label block mb-1.5">Đơn giá điện (VNĐ/kWh)</label>
                   <input
                     type="number"
@@ -493,22 +673,6 @@ const Billing = () => {
                   {Number(formData.electricityPrice) > HIGH_ELECTRICITY_PRICE_THRESHOLD && (
                     <p className="mt-1 text-xs text-amber-600">
                       Đơn giá điện có vẻ quá cao, bạn có chắc muốn dùng mức này không?
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="ds-label block mb-1.5">Đơn giá nước (VNĐ/khối)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    value={formData.waterPrice}
-                    onChange={(e) => setFormData({ ...formData, waterPrice: e.target.value })}
-                    className="input-field tabular-nums"
-                  />
-                  {Number(formData.waterPrice) > HIGH_WATER_PRICE_THRESHOLD && (
-                    <p className="mt-1 text-xs text-amber-600">
-                      Đơn giá nước có vẻ quá cao, bạn có chắc muốn dùng mức này không?
                     </p>
                   )}
                 </div>
@@ -531,7 +695,7 @@ const Billing = () => {
                     <div className="flex justify-between gap-3">
                       <span>
                         Điện: {formPreview.electricity.usage.toLocaleString('vi-VN')} kWh ×{' '}
-                        {Number(formPreview.electricity.unitPrice).toLocaleString('vi-VN')} VNĐ
+                        {Number(formPreview.electricity.unitPrice).toLocaleString('vi-VN')}đ
                       </span>
                       <span className="shrink-0 tabular-nums font-medium">
                         {formatCurrency(formPreview.electricity.amount)}
@@ -539,8 +703,9 @@ const Billing = () => {
                     </div>
                     <div className="flex justify-between gap-3">
                       <span>
-                        Nước: {formPreview.water.usage.toLocaleString('vi-VN')} khối ×{' '}
-                        {Number(formPreview.water.unitPrice).toLocaleString('vi-VN')} VNĐ
+                        {formPreview.waterBillingType === WATER_BILLING_PER_PERSON
+                          ? `Nước: ${formPreview.water.peopleCount.toLocaleString('vi-VN')} người × ${Number(formPreview.water.unitPrice).toLocaleString('vi-VN')}đ`
+                          : `Nước: ${formPreview.water.usage.toLocaleString('vi-VN')} khối × ${Number(formPreview.water.unitPrice).toLocaleString('vi-VN')}đ`}
                       </span>
                       <span className="shrink-0 tabular-nums font-medium">
                         {formatCurrency(formPreview.water.amount)}
@@ -565,11 +730,16 @@ const Billing = () => {
                 )}
 
                 <div className="sm:col-span-2 flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4 border-t border-[var(--color-outline)]">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="btn-ghost">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    disabled={pendingSubmit}
+                    className="btn-ghost"
+                  >
                     Hủy
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Lưu & Tính tiền
+                  <button type="submit" disabled={pendingSubmit} className="btn-primary">
+                    {pendingSubmit ? 'Đang lưu...' : 'Lưu & Tính tiền'}
                   </button>
                 </div>
               </form>
@@ -577,6 +747,17 @@ const Billing = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={priceConfirmOpen}
+        title="Xác nhận đơn giá cao"
+        message={priceWarnings.join('\n\n')}
+        confirmText="Tiếp tục lưu"
+        cancelText="Kiểm tra lại"
+        loading={pendingSubmit}
+        onConfirm={submitBill}
+        onCancel={() => setPriceConfirmOpen(false)}
+      />
 
       <AnimatePresence>
         {billToExport && (

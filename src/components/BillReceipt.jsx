@@ -1,5 +1,5 @@
 import React from 'react';
-import { buildBillBreakdown, formatCurrency } from '../utils/billCalculator';
+import { buildBillBreakdown, formatCurrency, WATER_BILLING_PER_PERSON } from '../utils/billCalculator';
 import StatusBadge from './StatusBadge';
 
 const BillReceipt = ({ bill, innerRef }) => {
@@ -20,6 +20,13 @@ const BillReceipt = ({ bill, innerRef }) => {
   const { rentPrice, serviceFee, electricity, water, totalAmount } = breakdown;
   const backendTotal = Number(bill.totalAmount || 0);
   const finalTotal = backendTotal > 0 ? backendTotal : totalAmount;
+  const isPerPerson =
+    bill.waterBillingType === WATER_BILLING_PER_PERSON ||
+    water.billingType === WATER_BILLING_PER_PERSON;
+
+  const waterLabel = isPerPerson
+    ? `Nước: ${Number(water.peopleCount ?? bill.waterPeopleCount ?? 1).toLocaleString('vi-VN')} người × ${Number(water.unitPrice ?? bill.waterPrice ?? 0).toLocaleString('vi-VN')} VNĐ`
+    : `Nước: ${Number(water.usage ?? bill.waterUsage ?? Math.max(0, Number(bill.waterNew || 0) - Number(bill.waterOld || 0))).toLocaleString('vi-VN')} khối × ${Number(water.unitPrice ?? bill.waterPrice ?? 0).toLocaleString('vi-VN')} VNĐ`;
 
   return (
     <div
@@ -70,10 +77,7 @@ const BillReceipt = ({ bill, innerRef }) => {
           </span>
         </div>
         <div className="flex justify-between gap-3">
-          <span className="text-left">
-            Nước: {Number(bill.waterOld || 0).toLocaleString('vi-VN')} → {Number(bill.waterNew || 0).toLocaleString('vi-VN')} ({water.usage.toLocaleString('vi-VN')} khối ×{' '}
-            {Number(water.unitPrice).toLocaleString('vi-VN')} VNĐ)
-          </span>
+          <span className="text-left">{waterLabel}</span>
           <span className="font-semibold shrink-0 text-right tabular-nums">
             {formatCurrency(water.amount)}
           </span>

@@ -4,17 +4,17 @@ import axiosClient from '../api/axiosClient';
 import { TableSkeleton, PageError } from '../components/PageLoader';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
+import { useToast } from '../components/ToastProvider';
+import { PHONE_ERROR, validatePhone } from '../utils/validation';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 
-const PHONE_REGEX = /^0\d{9}$/;
 const IDCARD_REGEX = /^\d{12}$/;
-
-const PHONE_ERROR = 'Số điện thoại không hợp lệ. Vui lòng nhập 10 chữ số và bắt đầu bằng 0.';
 const IDCARD_ERROR = 'Căn cước công dân không hợp lệ. Vui lòng nhập đúng 12 chữ số.';
 
 const emptyForm = { fullName: '', birthYear: '', hometown: '', idCard: '', phone: '', roomId: '' };
 
 const Tenants = () => {
+  const { showToast } = useToast();
   const [tenants, setTenants] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +77,7 @@ const Tenants = () => {
     if (!data.fullName) errors.fullName = 'Vui lòng nhập họ và tên.';
     if (!data.birthYear) errors.birthYear = 'Vui lòng nhập năm sinh.';
     if (!data.hometown) errors.hometown = 'Vui lòng nhập quê quán.';
-    if (!PHONE_REGEX.test(data.phone)) errors.phone = PHONE_ERROR;
+    if (!validatePhone(data.phone)) errors.phone = PHONE_ERROR;
     if (!IDCARD_REGEX.test(data.idCard)) errors.idCard = IDCARD_ERROR;
     return errors;
   };
@@ -111,8 +111,10 @@ const Tenants = () => {
       };
       if (editingId) {
         await axiosClient.put(`/tenants/${editingId}`, payload);
+        showToast({ type: 'success', message: 'Cập nhật khách thuê thành công.' });
       } else {
         await axiosClient.post('/tenants', payload);
+        showToast({ type: 'success', message: 'Thêm khách thuê thành công.' });
       }
       closeModal();
       fetchData();
@@ -120,6 +122,7 @@ const Tenants = () => {
       console.error('Error submitting tenant:', err);
       const msg = err?.response?.data?.message || 'Có lỗi xảy ra. Vui lòng thử lại.';
       setSubmitError(msg);
+      showToast({ type: 'error', message: msg });
     } finally {
       setSubmitting(false);
     }
@@ -161,10 +164,13 @@ const Tenants = () => {
       await axiosClient.delete(`/tenants/${deleteId}`);
       setConfirmOpen(false);
       setDeleteId(null);
+      showToast({ type: 'success', message: 'Xóa khách thuê thành công.' });
       fetchData();
     } catch (err) {
       console.error('Error deleting tenant:', err);
-      setConfirmError(err?.response?.data?.message || 'Có lỗi xảy ra khi xóa khách thuê.');
+      const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi xóa khách thuê.';
+      setConfirmError(msg);
+      showToast({ type: 'error', message: msg });
     } finally {
       setConfirmLoading(false);
     }

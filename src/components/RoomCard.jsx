@@ -8,6 +8,7 @@ import {
   Pencil,
   Trash2,
   ReceiptText,
+  Eye,
 } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 
@@ -21,11 +22,28 @@ const statusBarClass = (status) => {
   return 'bg-slate-400';
 };
 
-const RoomCard = ({ room, tenant, onEdit, onDelete, onCreateBill }) => {
+const RoomCard = ({ room, tenant, tenantCount = 0, onEdit, onDelete, onCreateBill, onDetail }) => {
   const hasTenant = Boolean(tenant);
+  const extraTenants = tenantCount > 1 ? tenantCount - 1 : 0;
+
+  const handleCardClick = () => {
+    onDetail?.(room);
+  };
 
   return (
-    <article className="room-card group">
+    <article
+      className="room-card group cursor-pointer"
+      onClick={handleCardClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleCardClick();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Chi tiết phòng ${room.name}`}
+    >
       <div className={`h-1.5 w-full ${statusBarClass(room.status)}`} />
 
       <div className="p-4 md:p-5 space-y-4">
@@ -54,6 +72,11 @@ const RoomCard = ({ room, tenant, onEdit, onDelete, onCreateBill }) => {
               <p className="font-semibold text-[var(--color-on-surface)] flex items-center gap-2">
                 <User size={14} className="text-[var(--color-muted)] shrink-0" />
                 <span className="truncate">{tenant.fullName || 'Chưa có tên khách'}</span>
+                {extraTenants > 0 && (
+                  <span className="shrink-0 text-xs font-semibold text-[var(--color-primary)] bg-[var(--color-primary-tint)] px-2 py-0.5 rounded-full">
+                    +{extraTenants} khách
+                  </span>
+                )}
               </p>
               <p className="text-[var(--color-on-surface-variant)] flex items-center gap-2">
                 <Phone size={14} className="text-[var(--color-muted)] shrink-0" />
@@ -87,7 +110,22 @@ const RoomCard = ({ room, tenant, onEdit, onDelete, onCreateBill }) => {
         <div className="inline-flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => onEdit(room)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDetail?.(room);
+            }}
+            className="icon-btn text-[var(--color-primary)] hover:bg-[var(--color-primary-tint)]"
+            aria-label="Chi tiết phòng"
+            title="Chi tiết"
+          >
+            <Eye size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(room);
+            }}
             className="icon-btn text-blue-600 hover:bg-blue-50"
             aria-label="Sửa phòng"
             title="Sửa phòng"
@@ -96,7 +134,10 @@ const RoomCard = ({ room, tenant, onEdit, onDelete, onCreateBill }) => {
           </button>
           <button
             type="button"
-            onClick={() => onDelete(room.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(room.id);
+            }}
             className="icon-btn text-rose-600 hover:bg-rose-50"
             aria-label="Xóa phòng"
             title="Xóa phòng"
@@ -104,7 +145,14 @@ const RoomCard = ({ room, tenant, onEdit, onDelete, onCreateBill }) => {
             <Trash2 size={16} />
           </button>
         </div>
-        <button type="button" onClick={() => onCreateBill(room)} className="btn-primary !py-2 !px-3 !text-xs">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCreateBill(room);
+          }}
+          className="btn-primary !py-2 !px-3 !text-xs"
+        >
           <ReceiptText size={14} />
           Tính tiền
         </button>

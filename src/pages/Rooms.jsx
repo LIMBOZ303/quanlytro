@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axiosClient from '../api/axiosClient';
@@ -6,10 +6,20 @@ import { TableSkeleton, PageError } from '../components/PageLoader';
 import ConfirmDialog from '../components/ConfirmDialog';
 import EmptyState from '../components/EmptyState';
 import RoomCard from '../components/RoomCard';
+import RoomDetailModal from '../components/RoomDetailModal';
+import { useToast } from '../components/ToastProvider';
 import { Plus } from 'lucide-react';
+
+const getRoomTenants = (room, tenantsByRoomId) => {
+  if (Array.isArray(room?.tenants) && room.tenants.length > 0) {
+    return room.tenants;
+  }
+  return tenantsByRoomId.get(room.id) || [];
+};
 
 const Rooms = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [rooms, setRooms] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,10 +27,13 @@ const Rooms = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: '', rentPrice: '', serviceFee: '', status: 'Trống' });
   const [editingId, setEditingId] = useState(null);
+  const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [confirmError, setConfirmError] = useState('');
+  const [detailRoom, setDetailRoom] = useState(null);
 
   const fetchRooms = async () => {
     setLoading(true);
@@ -56,25 +69,75 @@ const Rooms = () => {
     fetchRooms();
   }, []);
 
+  const tenantsByRoomId = useMemo(() => {
+    const map = new Map();
+    tenants.forEach((tenant) => {
+      if (tenant?.roomId) {
+        if (!map.has(tenant.roomId)) {
+          map.set(tenant.roomId, []);
+        }
+        map.get(tenant.roomId).push(tenant);
+      }
+    });
+    return map;
+  }, [tenants]);
+
   const openAddModal = () => {
     setEditingId(null);
     setFormData({ name: '', rentPrice: '', serviceFee: '', status: 'Trống' });
+    setFormError('');
     setIsModalOpen(true);
+  };
+
+  const closeRoomModal = () => {
+    if (submitting) return;
+    setIsModalOpen(false);
+    setEditingId(null);
+    setFormData({ name: '', rentPrice: '', serviceFee: '', status: 'Trống' });
+    setFormError('');
+  };
+
+  const checkDuplicateRoomName = (name, excludeId = null) => {
+    const normalized = name.trim().toLowerCase();
+    return rooms.some(
+      (r) =>
+        r.name?.trim().toLowerCase() === normalized &&
+        String(r.id) !== String(excludeId)
+    );
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
+
+    const trimmedName = formData.name.trim();
+    if (!trimmedName) {
+      setFormError('Vui lòng nhập tên phòng.');
+      return;
+    }
+
+    if (checkDuplicateRoomName(trimmedName, editingId)) {
+      const msg = 'Tên phòng này đã tồn tại. Vui lòng chọn tên phòng khác.';
+      setFormError(msg);
+      showToast({ type: 'error', message: msg });
+      return;
+    }
+
+    const payload = {
+      name: trimmedName,
+      rentPrice: Number(formData.rentPrice),
+      serviceFee: Number(formData.serviceFee),
+      status: formData.status,
+    };
+
+    setSubmitting(true);
     try {
-      const payload = {
-        name: formData.name,
-        rentPrice: Number(formData.rentPrice),
-        serviceFee: Number(formData.serviceFee),
-        status: formData.status,
-      };
       if (editingId) {
         await axiosClient.put(`/rooms/${editingId}`, payload);
+        showToast({ type: 'success', message: 'Cập nhật phòng thành công.' });
       } else {
         await axiosClient.post('/rooms', payload);
+        showToast({ type: 'success', message: 'Thêm phòng thành công.' });
       }
       setIsModalOpen(false);
       setEditingId(null);
@@ -82,7 +145,12 @@ const Rooms = () => {
       fetchRooms();
     } catch (err) {
       console.error('Error submitting room:', err);
-      alert('Có lỗi xảy ra!');
+      const msg =
+        err?.response?.data?.message || 'Có lỗi xảy ra. Vui lòng thử lại.';
+      setFormError(msg);
+      showToast({ type: 'error', message: msg });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -94,6 +162,7 @@ const Rooms = () => {
       status: room.status,
     });
     setEditingId(room.id);
+    setFormError('');
     setIsModalOpen(true);
   };
 
@@ -118,13 +187,23 @@ const Rooms = () => {
       await axiosClient.delete(`/rooms/${deleteId}`);
       setConfirmOpen(false);
       setDeleteId(null);
+      showToast({ type: 'success', message: 'Xóa phòng thành công.' });
+      if (detailRoom?.id === deleteId) {
+        setDetailRoom(null);
+      }
       fetchRooms();
     } catch (err) {
       console.error('Error deleting room:', err);
-      setConfirmError(err?.response?.data?.message || 'Có lỗi xảy ra khi xóa phòng.');
+      const msg = err?.response?.data?.message || 'Có lỗi xảy ra khi xóa phòng.';
+      setConfirmError(msg);
+      showToast({ type: 'error', message: msg });
     } finally {
       setConfirmLoading(false);
     }
+  };
+
+  const openRoomDetail = (room) => {
+    setDetailRoom(room);
   };
 
   if (loading) {
@@ -135,19 +214,20 @@ const Rooms = () => {
     return <PageError message={error} onRetry={fetchRooms} />;
   }
 
-  const tenantsByRoomId = new Map();
-  tenants.forEach((tenant) => {
-    if (tenant?.roomId && !tenantsByRoomId.has(tenant.roomId)) {
-      tenantsByRoomId.set(tenant.roomId, tenant);
-    }
+  const roomsWithTenant = rooms.map((room) => {
+    const roomTenants = getRoomTenants(room, tenantsByRoomId);
+    return {
+      ...room,
+      roomTenants,
+      currentTenant: roomTenants[0] || room.tenant || null,
+      tenantCount: roomTenants.length,
+    };
   });
 
-  const roomsWithTenant = rooms.map((room) => ({
-    ...room,
-    currentTenant: room.tenant || room.tenants?.[0] || tenantsByRoomId.get(room.id) || null,
-  }));
-
   const hasRooms = Array.isArray(rooms) && rooms.length > 0;
+  const detailTenants = detailRoom
+    ? getRoomTenants(detailRoom, tenantsByRoomId)
+    : [];
 
   return (
     <div className="ds-card overflow-hidden">
@@ -171,9 +251,11 @@ const Rooms = () => {
                 key={room.id}
                 room={room}
                 tenant={room.currentTenant}
+                tenantCount={room.tenantCount}
                 onEdit={handleEdit}
                 onDelete={openDeleteConfirm}
                 onCreateBill={(targetRoom) => navigate(`/billing?roomId=${targetRoom.id}`)}
+                onDetail={openRoomDetail}
               />
             ))}
           </div>
@@ -189,7 +271,7 @@ const Rooms = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/50 backdrop-blur-[8px]"
-              onClick={() => setIsModalOpen(false)}
+              onClick={closeRoomModal}
               aria-label="Đóng"
             />
             <motion.div
@@ -203,13 +285,21 @@ const Rooms = () => {
                 {editingId ? 'Sửa phòng' : 'Thêm phòng mới'}
               </h3>
               <form onSubmit={handleSubmit} className="space-y-4">
+                {formError && (
+                  <div className="rounded-lg border border-red-200 bg-[var(--color-error-light)] px-4 py-3 text-sm text-[var(--color-error)]">
+                    {formError}
+                  </div>
+                )}
                 <div>
                   <label className="ds-label block mb-1.5">Tên phòng</label>
                   <input
                     type="text"
                     required
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      if (formError) setFormError('');
+                    }}
                     className="input-field"
                   />
                 </div>
@@ -247,11 +337,11 @@ const Rooms = () => {
                   </select>
                 </div>
                 <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-4 safe-bottom">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="btn-ghost">
+                  <button type="button" onClick={closeRoomModal} disabled={submitting} className="btn-ghost">
                     Hủy
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Lưu
+                  <button type="submit" disabled={submitting} className="btn-primary">
+                    {submitting ? 'Đang lưu...' : 'Lưu'}
                   </button>
                 </div>
               </form>
@@ -259,6 +349,13 @@ const Rooms = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <RoomDetailModal
+        open={Boolean(detailRoom)}
+        room={detailRoom}
+        tenants={detailTenants}
+        onClose={() => setDetailRoom(null)}
+      />
 
       <ConfirmDialog
         open={confirmOpen}
